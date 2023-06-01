@@ -22,8 +22,10 @@
 #include <sys/time.h>
 #include "quicly/defaults.h"
 
-#define DEFAULT_INITIAL_EGRESS_MAX_UDP_PAYLOAD_SIZE 1280
-#define DEFAULT_MAX_UDP_PAYLOAD_SIZE 1472
+//#define DEFAULT_INITIAL_EGRESS_MAX_UDP_PAYLOAD_SIZE 1458
+//#define DEFAULT_MAX_UDP_PAYLOAD_SIZE 1458
+#define DEFAULT_INITIAL_EGRESS_MAX_UDP_PAYLOAD_SIZE 3958
+#define DEFAULT_MAX_UDP_PAYLOAD_SIZE 3958
 #define DEFAULT_MAX_PACKETS_PER_KEY 16777216
 #define DEFAULT_MAX_CRYPTO_BYTES 65536
 #define DEFAULT_INITCWND_PACKETS 10
@@ -399,6 +401,12 @@ static int default_setup_cipher(quicly_crypto_engine_t *engine, quicly_conn_t *c
         goto Exit;
     }
 
+//    if (conn) {
+//	printf("epoch %d\n", epoch);
+//        ((struct _st_quicly_conn_public_t *)conn)->hp_arr[epoch] = *hp_ctx;
+//        ((struct _st_quicly_conn_public_t *)conn)->aead_arr[epoch] = *aead_ctx;
+//    }
+
     ret = 0;
 Exit:
     if (ret != 0) {
@@ -415,11 +423,39 @@ Exit:
     return ret;
 }
 
+static inline uint8_t get_epoch(uint8_t first_byte)
+{
+    if (!QUICLY_PACKET_IS_LONG_HEADER(first_byte))
+        return QUICLY_EPOCH_1RTT;
+
+    switch (first_byte & QUICLY_PACKET_TYPE_BITMASK) {
+    case QUICLY_PACKET_TYPE_INITIAL:
+        return QUICLY_EPOCH_INITIAL;
+    case QUICLY_PACKET_TYPE_HANDSHAKE:
+        return QUICLY_EPOCH_HANDSHAKE;
+    case QUICLY_PACKET_TYPE_0RTT:
+        return QUICLY_EPOCH_0RTT;
+    default:
+        assert(!"FIXME");
+    }
+}
+
 static void default_finalize_send_packet(quicly_crypto_engine_t *engine, quicly_conn_t *conn,
                                          ptls_cipher_context_t *header_protect_ctx, ptls_aead_context_t *packet_protect_ctx,
                                          ptls_iovec_t datagram, size_t first_byte_at, size_t payload_from, uint64_t packet_number,
                                          int coalesced)
 {
+    struct cipher_meta *cm = (struct cipher_meta *)malloc(1*sizeof(struct cipher_meta));
+    cm->payload_from = payload_from;
+    cm->tag_size = packet_protect_ctx->algo->tag_size;
+    cm->first_byte_at = first_byte_at;
+    cm->packet_num = packet_number;
+    cm->len = datagram.len;
+    cm->header_protect_ctx = header_protect_ctx;
+    cm->packet_protect_ctx = packet_protect_ctx;
+    ((struct _st_quicly_conn_public_t *)conn)->cipher_meta_vec[((struct _st_quicly_conn_public_t *)conn)->cm_count++] = cm;
+
+//    printf("entered encrypt: len %ld  first_byte_at %ld  datagram.base %ld \n", cm->len, first_byte_at, datagram.base);
     ptls_aead_supplementary_encryption_t supp = {.ctx = header_protect_ctx,
                                                  .input = datagram.base + payload_from - QUICLY_SEND_PN_SIZE + QUICLY_MAX_PN_SIZE};
 

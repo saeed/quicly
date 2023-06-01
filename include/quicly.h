@@ -502,6 +502,16 @@ struct st_quicly_default_scheduler_state_t {
 
 typedef void (*quicly_trace_cb)(void *ctx, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 
+struct cipher_meta {
+	unsigned long payload_from;
+	unsigned long tag_size;
+	unsigned long first_byte_at;
+	unsigned long packet_num;
+	unsigned long len;
+	ptls_cipher_context_t *header_protect_ctx;
+       	ptls_aead_context_t *packet_protect_ctx;
+} __attribute__((packed));
+
 struct _st_quicly_conn_public_t {
     quicly_context_t *ctx;
     quicly_state_t state;
@@ -555,6 +565,12 @@ struct _st_quicly_conn_public_t {
     struct {
         QUICLY_STATS_PREBUILT_FIELDS;
     } stats;
+
+    ptls_cipher_context_t *hp_arr[4];
+    ptls_aead_context_t *aead_arr[4];
+    int cm_count;
+    struct cipher_meta *cipher_meta_vec[1000];
+
     uint32_t version;
     void *data;
     /**

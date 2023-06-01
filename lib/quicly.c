@@ -2103,6 +2103,10 @@ static quicly_conn_t *create_connection(quicly_context_t *ctx, uint32_t protocol
     }
     conn->super.remote.transport_params = default_transport_params;
     conn->super.version = protocol_version;
+    printf("connection created %ld\n", conn->super.hp_arr);
+    conn->super.hp_arr[0] = NULL;
+    conn->super.aead_arr[0] = NULL;
+    conn->super.cm_count = 0;
     conn->super.remote.largest_retire_prior_to = 0;
     quicly_linklist_init(&conn->super._default_scheduler.active);
     quicly_linklist_init(&conn->super._default_scheduler.blocked);
@@ -2875,12 +2879,15 @@ static int on_ack_retire_connection_id(quicly_sentmap_t *map, const quicly_sent_
 
 static int should_send_datagram_frame(quicly_conn_t *conn)
 {
-    if (conn->egress.datagram_frame_payloads.count == 0)
+    if (conn->egress.datagram_frame_payloads.count == 0) {
         return 0;
-    if (conn->application == NULL)
+    }
+    if (conn->application == NULL){
         return 0;
-    if (conn->application->cipher.egress.key.aead == NULL)
+    }
+    if (conn->application->cipher.egress.key.aead == NULL) {
         return 0;
+    }
     return 1;
 }
 
@@ -3195,8 +3202,10 @@ static int do_allocate_frame(quicly_conn_t *conn, quicly_send_context_t *s, size
          * last one datagram) so that they can be sent at once using GSO. */
         if (!coalescible)
             s->target.full_size = 1;
-        if ((ret = commit_send_packet(conn, s, coalescible)) != 0)
+        if ((ret = commit_send_packet(conn, s, coalescible)) != 0) {
+            printf("commit failed 1\n");
             return ret;
+	}
     } else {
         coalescible = 0;
     }
@@ -3332,8 +3341,11 @@ Emit: /* emit an ACK frame */
             *s->dst++ = QUICLY_FRAME_TYPE_PADDING;
         }
         s->target.full_size = 1;
-        if ((ret = commit_send_packet(conn, s, 0)) != 0)
+        if ((ret = commit_send_packet(conn, s, 0)) != 0) {
+	    printf("commit failed 2\n");
+
             return ret;
+	}
         goto Emit;
     }
 
@@ -4332,6 +4344,7 @@ static int do_send(quicly_conn_t *conn, quicly_send_context_t *s)
 
     /* handle timeouts */
     if (conn->idle_timeout.at <= conn->stash.now) {
+	//printf("#############################timeout 1\n");
         QUICLY_PROBE(IDLE_TIMEOUT, conn, conn->stash.now);
         conn->super.state = QUICLY_STATE_DRAINING;
         destroy_all_streams(conn, 0, 0);
@@ -4413,12 +4426,14 @@ static int do_send(quicly_conn_t *conn, quicly_send_context_t *s)
         if (!ack_only) {
             /* PTO or loss detection timeout, always send PING. This is the easiest thing to do in terms of timer control. */
             if (min_packets_to_send != 0) {
+		//printf("#############################timeout 2\n");
                 if ((ret = do_allocate_frame(conn, s, 1, ALLOCATE_FRAME_TYPE_ACK_ELICITING)) != 0)
                     goto Exit;
                 *s->dst++ = QUICLY_FRAME_TYPE_PING;
+		//printf("#############################probe created\n");
                 ++conn->super.stats.num_frames_sent.ping;
                 QUICLY_PROBE(PING_SEND, conn, conn->stash.now);
-            }
+	    }
             /* take actions only permitted for short header packets */
             if (conn->application->one_rtt_writable) {
                 /* send HANDSHAKE_DONE */
@@ -4609,8 +4624,10 @@ int quicly_send(quicly_conn_t *conn, quicly_address_t *dest, quicly_address_t *s
                 if ((ret = send_connection_close(conn, epoch, &s)) != 0)
                     goto Exit;
             }
-            if ((ret = commit_send_packet(conn, &s, 0)) != 0)
+            if ((ret = commit_send_packet(conn, &s, 0)) != 0) {
+		printf("commit failed 3\n");
                 goto Exit;
+	    }
         }
         /* wait at least 1ms */
         if ((conn->egress.send_ack_at = quicly_sentmap_get(&iter)->sent_at + get_sentmap_expiration_time(conn)) <= conn->stash.now)
@@ -5731,6 +5748,7 @@ int quicly_accept(quicly_conn_t **conn, quicly_context_t *ctx, struct sockaddr *
     next_expected_pn = 0; /* is this correct? do we need to take care of underflow? */
     if ((ret = decrypt_packet(cipher.ingress.header_protection, aead_decrypt_fixed_key, cipher.ingress.aead, &next_expected_pn,
                               packet, &pn, &payload)) != 0) {
+	printf("$$$$$$$$$$$decrypt failed\n");
         ret = QUICLY_ERROR_DECRYPTION_FAILED;
         goto Exit;
     }
@@ -5951,6 +5969,7 @@ int quicly_receive(quicly_conn_t *conn, struct sockaddr *dest_addr, struct socka
             ret = QUICLY_ERROR_PACKET_IGNORED;
             goto Exit;
         }
+	//printf("this is the norm\n");
         aead.cb = aead_decrypt_1rtt;
         aead.ctx = conn;
         space = (void *)&conn->application;
@@ -5961,6 +5980,7 @@ int quicly_receive(quicly_conn_t *conn, struct sockaddr *dest_addr, struct socka
     if ((ret = decrypt_packet(header_protection, aead.cb, aead.ctx, &(*space)->next_expected_packet_number, packet, &pn,
                               &payload)) != 0) {
         ++conn->super.stats.num_packets.decryption_failed;
+	printf("@@@@@@@@ decryption failed\n");
         QUICLY_PROBE(PACKET_DECRYPTION_FAILED, conn, conn->stash.now, pn);
         goto Exit;
     }
