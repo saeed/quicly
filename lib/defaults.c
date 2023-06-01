@@ -21,11 +21,13 @@
  */
 #include <sys/time.h>
 #include "quicly/defaults.h"
+#include <time.h>
 
-//#define DEFAULT_INITIAL_EGRESS_MAX_UDP_PAYLOAD_SIZE 1458
-//#define DEFAULT_MAX_UDP_PAYLOAD_SIZE 1458
-#define DEFAULT_INITIAL_EGRESS_MAX_UDP_PAYLOAD_SIZE 3958
-#define DEFAULT_MAX_UDP_PAYLOAD_SIZE 3958
+
+#define DEFAULT_INITIAL_EGRESS_MAX_UDP_PAYLOAD_SIZE 1458
+#define DEFAULT_MAX_UDP_PAYLOAD_SIZE 1458
+//#define DEFAULT_INITIAL_EGRESS_MAX_UDP_PAYLOAD_SIZE 3958
+//#define DEFAULT_MAX_UDP_PAYLOAD_SIZE 3958
 #define DEFAULT_MAX_PACKETS_PER_KEY 16777216
 #define DEFAULT_MAX_CRYPTO_BYTES 65536
 #define DEFAULT_INITCWND_PACKETS 10
@@ -148,6 +150,8 @@ static void default_encrypt_cid(quicly_cid_encryptor_t *_self, quicly_cid_t *enc
 static size_t default_decrypt_cid(quicly_cid_encryptor_t *_self, quicly_cid_plaintext_t *plaintext, const void *encrypted,
                                   size_t len)
 {
+    //struct timespec tstart={0,0}, tend={0,0};
+    //clock_gettime(CLOCK_MONOTONIC, &tstart);
     struct st_quicly_default_encrypt_cid_t *self = (void *)_self;
     uint8_t ptbuf[16];
     const uint8_t *p;
@@ -175,6 +179,11 @@ static size_t default_decrypt_cid(quicly_cid_encryptor_t *_self, quicly_cid_plai
     plaintext->thread_id = quicly_decode24(&p);
     plaintext->path_id = *p++;
     assert(p - ptbuf == len);
+
+    //clock_gettime(CLOCK_MONOTONIC, &tend);
+    //printf("some_long_computation took about %ld seconds\n",
+    //       (tend.tv_nsec) -
+    //       (tstart.tv_nsec));
 
     return len;
 }
@@ -445,7 +454,16 @@ static void default_finalize_send_packet(quicly_crypto_engine_t *engine, quicly_
                                          ptls_iovec_t datagram, size_t first_byte_at, size_t payload_from, uint64_t packet_number,
                                          int coalesced)
 {
-    struct cipher_meta *cm = (struct cipher_meta *)malloc(1*sizeof(struct cipher_meta));
+    // struct timespec tstart={0,0}, tend={0,0};
+    // clock_gettime(CLOCK_MONOTONIC, &tstart);
+
+
+    int cm_count = ((struct _st_quicly_conn_public_t *)conn)->cm_count++;
+
+    int cm_tail = ((struct _st_quicly_conn_public_t *)conn)->cm_tail;
+    ((struct _st_quicly_conn_public_t *)conn)->cm_tail = (cm_tail + 1) % CM_SIZE;
+
+    struct cipher_meta *cm = &(((struct _st_quicly_conn_public_t *)conn)->cipher_meta_vec[cm_tail]);
     cm->payload_from = payload_from;
     cm->tag_size = packet_protect_ctx->algo->tag_size;
     cm->first_byte_at = first_byte_at;
@@ -453,19 +471,24 @@ static void default_finalize_send_packet(quicly_crypto_engine_t *engine, quicly_
     cm->len = datagram.len;
     cm->header_protect_ctx = header_protect_ctx;
     cm->packet_protect_ctx = packet_protect_ctx;
-    ((struct _st_quicly_conn_public_t *)conn)->cipher_meta_vec[((struct _st_quicly_conn_public_t *)conn)->cm_count++] = cm;
 
 //    printf("entered encrypt: len %ld  first_byte_at %ld  datagram.base %ld \n", cm->len, first_byte_at, datagram.base);
-    ptls_aead_supplementary_encryption_t supp = {.ctx = header_protect_ctx,
-                                                 .input = datagram.base + payload_from - QUICLY_SEND_PN_SIZE + QUICLY_MAX_PN_SIZE};
+    
+    // ptls_aead_supplementary_encryption_t supp = {.ctx = header_protect_ctx,
+    //                                              .input = datagram.base + payload_from - QUICLY_SEND_PN_SIZE + QUICLY_MAX_PN_SIZE};
 
-    ptls_aead_encrypt_s(packet_protect_ctx, datagram.base + payload_from, datagram.base + payload_from,
-                        datagram.len - payload_from - packet_protect_ctx->algo->tag_size, packet_number,
-                        datagram.base + first_byte_at, payload_from - first_byte_at, &supp);
+    // ptls_aead_encrypt_s(packet_protect_ctx, datagram.base + payload_from, datagram.base + payload_from,
+    //                     datagram.len - payload_from - packet_protect_ctx->algo->tag_size, packet_number,
+    //                     datagram.base + first_byte_at, payload_from - first_byte_at, &supp);
 
-    datagram.base[first_byte_at] ^= supp.output[0] & (QUICLY_PACKET_IS_LONG_HEADER(datagram.base[first_byte_at]) ? 0xf : 0x1f);
-    for (size_t i = 0; i != QUICLY_SEND_PN_SIZE; ++i)
-        datagram.base[payload_from + i - QUICLY_SEND_PN_SIZE] ^= supp.output[i + 1];
+    // datagram.base[first_byte_at] ^= supp.output[0] & (QUICLY_PACKET_IS_LONG_HEADER(datagram.base[first_byte_at]) ? 0xf : 0x1f);
+    // for (size_t i = 0; i != QUICLY_SEND_PN_SIZE; ++i)
+    //     datagram.base[payload_from + i - QUICLY_SEND_PN_SIZE] ^= supp.output[i + 1];
+
+    // clock_gettime(CLOCK_MONOTONIC, &tend);
+    // printf("some_long_computation took about %ld seconds\n",
+    //        (tend.tv_nsec) -
+    //        (tstart.tv_nsec));
 }
 
 quicly_crypto_engine_t quicly_default_crypto_engine = {default_setup_cipher, default_finalize_send_packet};

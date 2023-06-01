@@ -2107,6 +2107,8 @@ static quicly_conn_t *create_connection(quicly_context_t *ctx, uint32_t protocol
     conn->super.hp_arr[0] = NULL;
     conn->super.aead_arr[0] = NULL;
     conn->super.cm_count = 0;
+    conn->super.cm_head = 0;
+    conn->super.cm_tail = 0;
     conn->super.remote.largest_retire_prior_to = 0;
     quicly_linklist_init(&conn->super._default_scheduler.active);
     quicly_linklist_init(&conn->super._default_scheduler.blocked);
@@ -2507,6 +2509,8 @@ static int decrypt_packet(ptls_cipher_context_t *header_protection,
                           int (*aead_cb)(void *, uint64_t, quicly_decoded_packet_t *, size_t, size_t *), void *aead_ctx,
                           uint64_t *next_expected_pn, quicly_decoded_packet_t *packet, uint64_t *pn, ptls_iovec_t *payload)
 {
+    // struct timespec tstart={0,0}, tend={0,0};
+    // clock_gettime(CLOCK_MONOTONIC, &tstart);
     int ret;
 
     /* decrypt ourselves, or use the pre-decrypted input */
@@ -2536,6 +2540,13 @@ static int decrypt_packet(ptls_cipher_context_t *header_protection,
     if (payload->len == 0) {
         return QUICLY_TRANSPORT_ERROR_PROTOCOL_VIOLATION;
     }
+
+    // clock_gettime(CLOCK_MONOTONIC, &tend);
+    // printf("some_long_computation took about %ld seconds\n",
+    //        (tend.tv_nsec) -
+    //        (tstart.tv_nsec));
+
+
 
     return 0;
 }
