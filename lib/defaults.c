@@ -445,7 +445,7 @@ static void default_finalize_send_packet(quicly_crypto_engine_t *engine, quicly_
                                          ptls_iovec_t datagram, size_t first_byte_at, size_t payload_from, uint64_t packet_number,
                                          int coalesced)
 {
-    struct cipher_meta *cm = (struct cipher_meta *)malloc(1*sizeof(struct cipher_meta));
+    /*struct cipher_meta *cm = (struct cipher_meta *)malloc(1*sizeof(struct cipher_meta));
     cm->payload_from = payload_from;
     cm->tag_size = packet_protect_ctx->algo->tag_size;
     cm->first_byte_at = first_byte_at;
@@ -453,7 +453,7 @@ static void default_finalize_send_packet(quicly_crypto_engine_t *engine, quicly_
     cm->len = datagram.len;
     cm->header_protect_ctx = header_protect_ctx;
     cm->packet_protect_ctx = packet_protect_ctx;
-    ((struct _st_quicly_conn_public_t *)conn)->cipher_meta_vec[((struct _st_quicly_conn_public_t *)conn)->cm_count++] = cm;
+    ((struct _st_quicly_conn_public_t *)conn)->cipher_meta_vec[((struct _st_quicly_conn_public_t *)conn)->cm_count++] = cm;*/
 
 //    printf("entered encrypt: len %ld  first_byte_at %ld  datagram.base %ld \n", cm->len, first_byte_at, datagram.base);
     ptls_aead_supplementary_encryption_t supp = {.ctx = header_protect_ctx,

@@ -512,6 +512,8 @@ struct cipher_meta {
        	ptls_aead_context_t *packet_protect_ctx;
 } __attribute__((packed));
 
+#define CM_SIZE 5000
+
 struct _st_quicly_conn_public_t {
     quicly_context_t *ctx;
     quicly_state_t state;
@@ -568,8 +570,8 @@ struct _st_quicly_conn_public_t {
 
     ptls_cipher_context_t *hp_arr[4];
     ptls_aead_context_t *aead_arr[4];
-    int cm_count;
-    struct cipher_meta *cipher_meta_vec[1000];
+    int cm_count, cm_head, cm_tail;
+    struct cipher_meta cipher_meta_vec[CM_SIZE];
 
     uint32_t version;
     void *data;
